@@ -4,14 +4,31 @@ import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
 import { checkDatabase, DatabaseFailureReason } from './db';
+import { loadConfig, type AppConfig } from './config';
+import { DISCLAIMER } from './constants';
+import { errorHandler } from './middleware/errorHandler';
+import { createApiRouter } from './routes';
+import { consoleAuditRecorder, type AuditRecorder } from './services/auditService';
 
-const DISCLAIMER =
-  'Research prototype - not for clinical diagnosis. Clinician review required.';
+export interface CreateAppOptions {
+  config?: AppConfig;
+  auditRecorder?: AuditRecorder;
+  now?: () => number;
+}
 
-export function createApp(): express.Express {
+export function createApp(options: CreateAppOptions = {}): express.Express {
+  const config = options.config ?? loadConfig(process.env);
+  const now = options.now ?? Date.now;
+
   const app = express();
 
-  app.use(cors());
+  app.set('trust proxy', config.trustProxy);
+
+  app.use(
+    cors({
+      origin: config.corsOrigins.includes('*') ? true : config.corsOrigins,
+    })
+  );
   app.use(helmet());
   app.use(compression());
   app.use(morgan('dev'));
@@ -83,16 +100,16 @@ export function createApp(): express.Express {
   app.get('/health/db', databaseHealth);
   app.get('/api/health/db', databaseHealth);
 
-  // Error handling middleware
-  app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    console.error('Server error:', err);
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error',
-      timestamp: new Date().toISOString(),
-      disclaimer: DISCLAIMER
-    });
-  });
+  app.use(
+    '/api',
+    createApiRouter({
+      config,
+      auditRecorder: options.auditRecorder ?? consoleAuditRecorder,
+      now,
+    })
+  );
+
+  app.use(errorHandler);
 
   return app;
 }

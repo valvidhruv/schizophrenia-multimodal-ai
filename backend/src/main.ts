@@ -4,14 +4,28 @@ dotenv.config();
 
 import { createApp } from './app';
 import { initDatabase, checkDatabase, closeDatabase, sanitizeDatabaseError } from './db';
+import { ConfigError, loadConfig, type AppConfig } from './config';
 
-const PORT = process.env.BACKEND_PORT || 3001;
 const SHUTDOWN_TIMEOUT_MS = 5000;
 
 async function start(): Promise<void> {
+  let config: AppConfig;
+  try {
+    config = loadConfig(process.env);
+  } catch (err) {
+    if (err instanceof ConfigError) {
+      console.error(err.message);
+      process.exit(1);
+    }
+    throw err;
+  }
+
   // Startup validation of database configuration
   try {
-    const { configured } = initDatabase();
+    const { configured } = initDatabase({
+      ...process.env,
+      DATABASE_URL: config.databaseUrl ?? '',
+    });
     if (configured) {
       const probe = await checkDatabase();
       if (probe.ok) {
@@ -27,9 +41,9 @@ async function start(): Promise<void> {
     process.exit(1);
   }
 
-  const app = createApp();
-  const server = app.listen(PORT, () => {
-    console.log(`Backend server running on port ${PORT}`);
+  const app = createApp({ config });
+  const server = app.listen(config.port, () => {
+    console.log(`Backend server running on port ${config.port}`);
   });
 
   let shuttingDown = false;
