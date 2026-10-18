@@ -1,0 +1,14 @@
+# docker-compose.gpu.yml - Optional GPU override for the AI service.
+# CPU remains the default; only apply this override on machines with the
+# NVIDIA Container Toolkit installed, and build with a CUDA base image, e.g.:
+#   docker compose build --build-arg BASE_IMAGE=pytorch/pytorch:2.1-cuda12.1-cudnn8-runtime ai-service
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up ai-service
+services:
+  ai-service:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

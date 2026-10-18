@@ -1,0 +1,224 @@
+# ============================================================
+# SCHIZOPHRENIA MULTIMODAL AI — GIT IGNORE
+# ============================================================
+
+# Dependencies
+node_modules/
+**/node_modules/
+.pnp/
+.pnp.js/
+
+# Python virtual environments
+.venv/
+**/.venv/
+venv/
+**/venv/
+env/
+**/env/
+ENV/
+
+# Python build outputs and caches
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+wheels/
+pip-wheel-metadata/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+
+# Build outputs
+dist/
+**/dist/
+build/
+**/build/
+out/
+.next/
+.nuxt/
+*.tsbuildinfo
+
+# IDE and editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# Operating system
+.DS_Store
+**/.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+Desktop.ini
+
+# Environment files and secrets
+.env*
+!.env.example
+!**/.env.example
+!.env.*.example
+!**/.env.*.example
+
+# Credentials and private keys
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.cer
+*.der
+secrets/
+.secrets/
+credentials/
+**/secrets/
+**/.secrets/
+
+# Logs
+logs/
+**/logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Databases and database backups
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+*.bak
+*.backup
+*.sql.gz
+
+# PostgreSQL local data and Docker volumes
+pgdata/
+postgres-data/
+**/pgdata/
+**/postgres-data/
+
+# Model weights and large ML artifacts
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.engine
+*.trt
+*.pb
+*.h5
+*.hdf5
+*.tflite
+*.gguf
+*.ggml
+*.model
+*.weights
+
+# Local model files and generated model artifacts
+models/
+**/models/
+
+# Research datasets — exclude private/raw/processed data
+datasets/raw/
+datasets/processed/
+datasets/external/
+datasets/private/
+datasets/**/raw/
+datasets/**/processed/
+datasets/**/private/
+
+# Dataset metadata files may contain sensitive information
+datasets/metadata/*.csv
+datasets/metadata/*.json
+datasets/metadata/*.xlsx
+datasets/metadata/*.parquet
+!datasets/metadata/.gitkeep
+
+# Uploaded files — never commit patient or user uploads
+uploads/*
+!uploads/.gitkeep
+**/uploads/*
+!**/uploads/.gitkeep
+
+# Reports and generated outputs
+reports/*.pdf
+reports/*.html
+reports/generated/
+reports/exports/
+results/
+outputs/
+artifacts/
+
+# Experiment tracking and ML tooling
+mlruns/
+.mlflow/
+wandb/
+.wandb/
+lightning_logs/
+tensorboard/
+runs/
+
+# Caches
+.cache/
+cache/
+**/cache/
+*.cache
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Profiling
+*.prof
+.prof/
+.nyc_output/
+coverage/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+*.swp
+
+# Jupyter generated files
+.ipynb_checkpoints/
+
+# Frontend environment files
+frontend/.env*
+!frontend/.env.example
+
+# Backend environment files
+backend/.env*
+!backend/.env.example
+
+# AI service environment files
+ai-service/.env*
+!ai-service/.env.example
+
+# Docker local overrides and secrets
+.docker/
+docker-compose.override.yml
+docker-compose.*.local.yml
+
+# Local certificates and TLS files
+certs/
+certificates/
+
+# Package manager and tool caches
+.npm/
+.pnpm-store/
+.yarn/cache/
+.parcel-cache/
+.vite/
+
+# Prisma local migration lock (only if Prisma is not used)
+backend/prisma/migrations/.migration_lock.toml

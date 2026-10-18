@@ -1,0 +1,6 @@
+# Development dependencies
+# These are optional and may not be needed for basic functionality
+# pydantic[email]==2.6.1
+# python-dotenv==1.0.0
+# pytest==8.2.0
+# httpx==0.27.0
