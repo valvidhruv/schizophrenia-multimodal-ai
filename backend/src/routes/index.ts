@@ -5,6 +5,7 @@ import { createAuditMiddleware } from '../middleware/audit';
 import { apiNotFoundHandler } from '../middleware/errorHandler';
 import { rateLimit } from '../middleware/rateLimit';
 import type { AuditRecorder } from '../services/auditService';
+import type { PatientStore } from '../services/patientService';
 import { createAnalysisRouter } from './analysis';
 import { createClinicalRouter } from './clinical';
 import { createFilesRouter } from './files';
@@ -15,10 +16,11 @@ export interface ApiRouterOptions {
   config: AppConfig;
   auditRecorder: AuditRecorder;
   now: () => number;
+  patientStore?: PatientStore;
 }
 
 export function createApiRouter(options: ApiRouterOptions): Router {
-  const { config, auditRecorder, now } = options;
+  const { config, auditRecorder, now, patientStore } = options;
   const router = Router();
 
   router.use(createAuditMiddleware(auditRecorder));
@@ -27,7 +29,7 @@ export function createApiRouter(options: ApiRouterOptions): Router {
   );
   router.use(createAuthenticate(config));
 
-  router.use('/patients', createPatientsRouter());
+  router.use('/patients', createPatientsRouter(patientStore));
   router.use('/patients', createFilesRouter(now));
   router.use('/patients', createClinicalRouter());
   router.use('/analysis', createAnalysisRouter(now));

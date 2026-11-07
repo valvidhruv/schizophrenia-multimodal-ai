@@ -42,6 +42,10 @@ export class ApiError extends Error {
     return new ApiError(404, 'NOT_FOUND', message);
   }
 
+  static conflict(message = 'The resource already exists.'): ApiError {
+    return new ApiError(409, 'CONFLICT', message);
+  }
+
   static rateLimited(message: string): ApiError {
     return new ApiError(429, 'RATE_LIMITED', message);
   }

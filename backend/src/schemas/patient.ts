@@ -29,7 +29,18 @@ export const updatePatientBodySchema = createPatientBodySchema
     path: ['(root)'],
   });
 
-export const listPatientsQuerySchema = paginationSchema.extend({
-  diagnosis: z.enum(DIAGNOSIS_VALUES).optional(),
-  search: z.string().max(100).optional(),
-});
+export const listPatientsQuerySchema = paginationSchema
+  .extend({
+    diagnosis: z.enum(DIAGNOSIS_VALUES).optional(),
+    search: z.string().max(100).optional(),
+  })
+  .superRefine((value, ctx) => {
+    const offset = (value.page - 1) * value.limit;
+    if (!Number.isSafeInteger(offset)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['page'],
+        message: 'page is too large',
+      });
+    }
+  });

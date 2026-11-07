@@ -5,6 +5,7 @@ dotenv.config();
 import { createApp } from './app';
 import { initDatabase, checkDatabase, closeDatabase, sanitizeDatabaseError } from './db';
 import { ConfigError, loadConfig, type AppConfig } from './config';
+import { createSqlPatientStore } from './services/patientService';
 
 const SHUTDOWN_TIMEOUT_MS = 5000;
 
@@ -21,11 +22,13 @@ async function start(): Promise<void> {
   }
 
   // Startup validation of database configuration
+  let databaseConfigured = false;
   try {
     const { configured } = initDatabase({
       ...process.env,
       DATABASE_URL: config.databaseUrl ?? '',
     });
+    databaseConfigured = configured;
     if (configured) {
       const probe = await checkDatabase();
       if (probe.ok) {
@@ -41,7 +44,10 @@ async function start(): Promise<void> {
     process.exit(1);
   }
 
-  const app = createApp({ config });
+  const app = createApp({
+    config,
+    patientStore: databaseConfigured ? createSqlPatientStore() : undefined,
+  });
   const server = app.listen(config.port, () => {
     console.log(`Backend server running on port ${config.port}`);
   });

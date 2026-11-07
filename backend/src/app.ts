@@ -9,11 +9,22 @@ import { DISCLAIMER } from './constants';
 import { errorHandler } from './middleware/errorHandler';
 import { createApiRouter } from './routes';
 import { consoleAuditRecorder, type AuditRecorder } from './services/auditService';
+import type { PatientStore } from './services/patientService';
+
+morgan.token('sanitizedurl', (req) => {
+  const source = req as { originalUrl?: string; url?: string };
+  const pathOnly = (source.originalUrl || source.url || '').split('?')[0];
+  return pathOnly.replace(
+    /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
+    ':id'
+  );
+});
 
 export interface CreateAppOptions {
   config?: AppConfig;
   auditRecorder?: AuditRecorder;
   now?: () => number;
+  patientStore?: PatientStore;
 }
 
 export function createApp(options: CreateAppOptions = {}): express.Express {
@@ -31,7 +42,9 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   );
   app.use(helmet());
   app.use(compression());
-  app.use(morgan('dev'));
+  app.use(
+    morgan(':method :sanitizedurl :status :response-time ms - :res[content-length]')
+  );
   app.use(express.json());
 
   // Process health (unchanged from Phase 1)
@@ -106,6 +119,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       config,
       auditRecorder: options.auditRecorder ?? consoleAuditRecorder,
       now,
+      patientStore: options.patientStore,
     })
   );
 
