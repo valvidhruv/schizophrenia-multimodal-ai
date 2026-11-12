@@ -4,6 +4,7 @@ import { loadConfig } from '../config';
 import { DISCLAIMER } from '../constants';
 import { ApiError } from '../errors';
 import { signAccessToken } from '../services/tokenService';
+import { acceptSignedPrincipals } from '../testing/principal';
 import type { AuditRecord, Role } from '../types';
 import type { PatientRecord, PatientStore } from '../services/patientService';
 
@@ -64,6 +65,7 @@ function appWith(store?: PatientStore, records?: AuditRecord[]) {
       records?.push(record);
     },
     patientStore: store,
+    validatePrincipal: acceptSignedPrincipals,
   });
 }
 

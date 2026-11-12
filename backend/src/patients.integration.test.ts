@@ -6,6 +6,7 @@ import { loadConfig } from './config';
 import { signAccessToken } from './services/tokenService';
 import { createSqlPatientStore } from './services/patientService';
 import { disposableDatabaseUrl } from './testing/disposableDatabaseUrl';
+import { acceptSignedPrincipals } from './testing/principal';
 
 // Requires the existing schema to be applied to TEST_DATABASE_URL before this
 // suite runs; it never applies migrations. On a fresh disposable database, run
@@ -97,6 +98,7 @@ describeLive('patient management integration (disposable test database)', () => 
       config: loadConfig(baseEnv),
       auditRecorder: () => undefined,
       patientStore: createSqlPatientStore(),
+      validatePrincipal: acceptSignedPrincipals,
     });
     suiteReady = true;
   });

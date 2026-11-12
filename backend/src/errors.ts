@@ -9,6 +9,7 @@ export type ApiErrorCode =
   | 'RATE_LIMITED'
   | 'PAYLOAD_TOO_LARGE'
   | 'AUTH_NOT_CONFIGURED'
+  | 'AUTH_UNAVAILABLE'
   | 'NOT_IMPLEMENTED'
   | 'INTERNAL_ERROR';
 
@@ -48,6 +49,14 @@ export class ApiError extends Error {
 
   static rateLimited(message: string): ApiError {
     return new ApiError(429, 'RATE_LIMITED', message);
+  }
+
+  static authUnavailable(): ApiError {
+    return new ApiError(
+      503,
+      'AUTH_UNAVAILABLE',
+      'Authentication is temporarily unavailable.'
+    );
   }
 
   static notImplemented(message: string): ApiError {

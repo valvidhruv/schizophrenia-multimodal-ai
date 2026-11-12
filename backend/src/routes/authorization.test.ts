@@ -2,6 +2,7 @@ import request from 'supertest';
 import { createApp } from '../app';
 import { loadConfig } from '../config';
 import { signAccessToken } from '../services/tokenService';
+import { acceptSignedPrincipals } from '../testing/principal';
 
 const TEST_SECRET = 'unit-test-secret-value-123456';
 const ADMIN_ID = '11111111-1111-4111-8111-111111111111';
@@ -22,6 +23,7 @@ const baseEnv = {
 const app = createApp({
   config: loadConfig(baseEnv),
   auditRecorder: () => undefined,
+  validatePrincipal: acceptSignedPrincipals,
 });
 
 function authHeader(role: 'admin' | 'clinician' | 'researcher', userId: string): string {

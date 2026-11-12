@@ -6,9 +6,11 @@ import morgan from 'morgan';
 import { checkDatabase, DatabaseFailureReason } from './db';
 import { loadConfig, type AppConfig } from './config';
 import { DISCLAIMER } from './constants';
+import type { PrincipalValidator } from './middleware/auth';
 import { errorHandler } from './middleware/errorHandler';
 import { createApiRouter } from './routes';
 import { consoleAuditRecorder, type AuditRecorder } from './services/auditService';
+import type { AuthService } from './services/authService';
 import type { PatientStore } from './services/patientService';
 
 morgan.token('sanitizedurl', (req) => {
@@ -25,6 +27,8 @@ export interface CreateAppOptions {
   auditRecorder?: AuditRecorder;
   now?: () => number;
   patientStore?: PatientStore;
+  authService?: AuthService;
+  validatePrincipal?: PrincipalValidator;
 }
 
 export function createApp(options: CreateAppOptions = {}): express.Express {
@@ -120,6 +124,8 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       auditRecorder: options.auditRecorder ?? consoleAuditRecorder,
       now,
       patientStore: options.patientStore,
+      authService: options.authService,
+      validatePrincipal: options.validatePrincipal,
     })
   );
 

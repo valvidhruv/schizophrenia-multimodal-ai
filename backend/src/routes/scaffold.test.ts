@@ -2,6 +2,7 @@ import request from 'supertest';
 import { createApp } from '../app';
 import { loadConfig } from '../config';
 import { signAccessToken } from '../services/tokenService';
+import { acceptSignedPrincipals } from '../testing/principal';
 import type { AuditRecord, Role } from '../types';
 
 const TEST_SECRET = 'unit-test-secret-value-123456';
@@ -28,6 +29,7 @@ const app = createApp({
   auditRecorder: (record) => {
     records.push(record);
   },
+  validatePrincipal: acceptSignedPrincipals,
 });
 
 function token(userId: string, role: Role): string {
@@ -277,6 +279,7 @@ describe('Phase 1 API scaffold', () => {
     const limitedApp = createApp({
       config: loadConfig({ ...baseEnv, BACKEND_RATE_LIMIT_MAX: '2' }),
       auditRecorder: () => undefined,
+      validatePrincipal: acceptSignedPrincipals,
     });
     const auth = `Bearer ${token(ADMIN_ID, 'admin')}`;
 
@@ -322,12 +325,27 @@ describe('Phase 1 API scaffold', () => {
     const noAuthApp = createApp({
       config: loadConfig({ NODE_ENV: 'test' }),
       auditRecorder: () => undefined,
+      validatePrincipal: acceptSignedPrincipals,
     });
 
     const res = await request(noAuthApp).get('/api/patients');
 
     expect(res.status).toBe(501);
     expect(res.body.error.code).toBe('AUTH_NOT_CONFIGURED');
+  });
+
+  test('fails closed when no principal validator is configured', async () => {
+    const appWithoutValidation = createApp({
+      config: loadConfig(baseEnv),
+      auditRecorder: () => undefined,
+    });
+
+    const res = await request(appWithoutValidation)
+      .get('/api/patients')
+      .set('Authorization', adminAuth);
+
+    expect(res.status).toBe(503);
+    expect(res.body.error.code).toBe('AUTH_UNAVAILABLE');
   });
 
   test('restricts CORS to the configured origin', async () => {

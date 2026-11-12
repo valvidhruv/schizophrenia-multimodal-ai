@@ -19,6 +19,7 @@ const envSchema = z.object({
   BACKEND_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(10000).default(100),
   JWT_SECRET: z.string().min(16, 'must be at least 16 characters').optional(),
   JWT_ACCESS_EXPIRY: z.string().regex(EXPIRY_PATTERN, 'must be a duration such as 15m').default('15m'),
+  JWT_REFRESH_EXPIRY: z.string().regex(EXPIRY_PATTERN, 'must be a duration such as 7d').default('7d'),
   DATABASE_URL: z.string().optional(),
   REDIS_URL: z.string().optional(),
   TRUST_PROXY: z.string().optional(),
@@ -42,7 +43,11 @@ export interface AppConfig {
   port: number;
   corsOrigins: string[];
   rateLimit: { windowMs: number; max: number };
-  auth: { accessTokenSecret: string | null; accessTokenTtlSeconds: number };
+  auth: {
+    accessTokenSecret: string | null;
+    accessTokenTtlSeconds: number;
+    refreshTokenTtlSeconds: number;
+  };
   databaseUrl: string | null;
   redisUrl: string | null;
   trustProxy: TrustProxySetting;
@@ -56,10 +61,10 @@ function blankToUndefined(env: NodeJS.ProcessEnv): Record<string, unknown> {
   return normalized;
 }
 
-function expiryToSeconds(raw: string): number {
+function expiryToSeconds(raw: string, variable = 'JWT_ACCESS_EXPIRY'): number {
   const match = EXPIRY_PATTERN.exec(raw);
   if (!match) {
-    throw new ConfigError(['JWT_ACCESS_EXPIRY must be a duration such as 15m, 2h, or 7d']);
+    throw new ConfigError([`${variable} must be a duration such as 15m, 2h, or 7d`]);
   }
   return Number(match[1]) * EXPIRY_UNIT_SECONDS[match[2]];
 }
@@ -172,6 +177,10 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     auth: {
       accessTokenSecret: data.JWT_SECRET ?? null,
       accessTokenTtlSeconds: expiryToSeconds(data.JWT_ACCESS_EXPIRY),
+      refreshTokenTtlSeconds: expiryToSeconds(
+        data.JWT_REFRESH_EXPIRY,
+        'JWT_REFRESH_EXPIRY'
+      ),
     },
     databaseUrl: data.DATABASE_URL ?? null,
     redisUrl: data.REDIS_URL ?? null,

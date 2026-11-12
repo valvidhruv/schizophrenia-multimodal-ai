@@ -10,6 +10,7 @@ describe('loadConfig', () => {
     expect(config.rateLimit).toEqual({ windowMs: 900000, max: 100 });
     expect(config.auth.accessTokenSecret).toBeNull();
     expect(config.auth.accessTokenTtlSeconds).toBe(900);
+    expect(config.auth.refreshTokenTtlSeconds).toBe(604800);
     expect(config.databaseUrl).toBeNull();
     expect(config.redisUrl).toBeNull();
   });
@@ -27,11 +28,13 @@ describe('loadConfig', () => {
     const config = loadConfig({
       JWT_SECRET: secret,
       JWT_ACCESS_EXPIRY: '2h',
+      JWT_REFRESH_EXPIRY: '14d',
       BACKEND_PORT: '4000',
     });
 
     expect(config.auth.accessTokenSecret).toBe(secret);
     expect(config.auth.accessTokenTtlSeconds).toBe(7200);
+    expect(config.auth.refreshTokenTtlSeconds).toBe(1209600);
     expect(config.port).toBe(4000);
   });
 
@@ -63,6 +66,18 @@ describe('loadConfig', () => {
 
   test('rejects an unparsable access token expiry', () => {
     expect(() => loadConfig({ JWT_ACCESS_EXPIRY: 'soon' })).toThrow(ConfigError);
+  });
+
+  test('rejects an unparsable refresh token expiry and names the variable', () => {
+    let caught: unknown;
+    try {
+      loadConfig({ JWT_REFRESH_EXPIRY: 'soon' });
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(ConfigError);
+    expect((caught as ConfigError).issues.join(' ')).toContain('JWT_REFRESH_EXPIRY');
   });
 
   test('splits multiple allowed CORS origins', () => {

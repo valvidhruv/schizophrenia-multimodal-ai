@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "migrate": "tsx src/migrate.ts up",
-    "migrate:status": "tsx src/migrate.ts status"
+    "migrate:status": "tsx src/migrate.ts status",
+    "create-admin": "tsx src/scripts/createAdmin.ts"
   },
   "dependencies": {
     "compression": "^1.7.4",

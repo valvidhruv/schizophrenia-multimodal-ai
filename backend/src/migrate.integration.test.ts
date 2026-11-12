@@ -4,6 +4,7 @@ import { disposableDatabaseUrl } from './testing/disposableDatabaseUrl';
 
 const EXPECTED_TABLES = [
   'users',
+  'refresh_tokens',
   'patients',
   'patient_files',
   'clinical_assessments',
@@ -45,6 +46,37 @@ describeLive('migration integration (disposable test database)', () => {
     for (const table of EXPECTED_TABLES) {
       expect(found).toContain(table);
     }
+  });
+
+  test('creates refresh-token family columns and indexes', async () => {
+    await runUp();
+    const columns = await query<{ column_name: string; is_nullable: string }>(
+      `SELECT column_name, is_nullable
+       FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = 'refresh_tokens'`
+    );
+    const familyId = columns.find((column) => column.column_name === 'family_id');
+    expect(familyId).toMatchObject({ is_nullable: 'NO' });
+    expect(columns.map((column) => column.column_name)).toEqual(
+      expect.arrayContaining(['family_id', 'replaced_by', 'expires_at'])
+    );
+
+    const indexes = await query<{ indexname: string; indexdef: string }>(
+      `SELECT indexname, indexdef
+       FROM pg_indexes
+       WHERE schemaname = 'public' AND tablename = 'refresh_tokens'`
+    );
+    const indexNames = indexes.map((index) => index.indexname);
+    expect(indexNames).toEqual(
+      expect.arrayContaining([
+        'idx_refresh_tokens_family_id',
+        'idx_refresh_tokens_active_family',
+      ])
+    );
+    const activeFamily = indexes.find(
+      (index) => index.indexname === 'idx_refresh_tokens_active_family'
+    );
+    expect(activeFamily?.indexdef).toMatch(/WHERE.*revoked_at IS NULL/i);
   });
 
   test('records every migration file in schema_migrations', async () => {

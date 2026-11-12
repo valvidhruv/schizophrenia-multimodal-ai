@@ -2,6 +2,7 @@ import request from 'supertest';
 import { createApp } from './app';
 import { loadConfig } from './config';
 import { signAccessToken } from './services/tokenService';
+import { acceptSignedPrincipals } from './testing/principal';
 
 const TEST_SECRET = 'unit-test-secret-value-123456';
 const ADMIN_ID = '11111111-1111-4111-8111-111111111111';
@@ -32,6 +33,7 @@ describe('access log sanitization', () => {
         BACKEND_RATE_LIMIT_MAX: '1000',
       }),
       auditRecorder: () => undefined,
+      validatePrincipal: acceptSignedPrincipals,
     });
     const token = signAccessToken({ userId: ADMIN_ID, role: 'admin' }, TEST_SECRET, 900);
 

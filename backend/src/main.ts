@@ -3,8 +3,15 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import { createApp } from './app';
-import { initDatabase, checkDatabase, closeDatabase, sanitizeDatabaseError } from './db';
+import {
+  initDatabase,
+  checkDatabase,
+  closeDatabase,
+  sanitizeDatabaseError,
+} from './db';
 import { ConfigError, loadConfig, type AppConfig } from './config';
+import { createSqlAuthStore } from './services/authStore';
+import { AuthService } from './services/authService';
 import { createSqlPatientStore } from './services/patientService';
 
 const SHUTDOWN_TIMEOUT_MS = 5000;
@@ -44,9 +51,19 @@ async function start(): Promise<void> {
     process.exit(1);
   }
 
+  const authService = databaseConfigured
+    ? new AuthService({
+        store: createSqlAuthStore(),
+        accessTokenSecret: config.auth.accessTokenSecret,
+        accessTokenTtlSeconds: config.auth.accessTokenTtlSeconds,
+        refreshTokenTtlSeconds: config.auth.refreshTokenTtlSeconds,
+      })
+    : undefined;
+
   const app = createApp({
     config,
     patientStore: databaseConfigured ? createSqlPatientStore() : undefined,
+    authService,
   });
   const server = app.listen(config.port, () => {
     console.log(`Backend server running on port ${config.port}`);

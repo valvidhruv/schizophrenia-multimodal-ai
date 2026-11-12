@@ -3,6 +3,7 @@ import request from 'supertest';
 import { createApp } from '../app';
 import { loadConfig } from '../config';
 import { signAccessToken } from '../services/tokenService';
+import { acceptSignedPrincipals } from '../testing/principal';
 import { createAuditMiddleware } from './audit';
 import type { AuditRecord } from '../types';
 
@@ -62,6 +63,7 @@ describe('audit middleware record content', () => {
       auditRecorder: (record) => {
         records.push(record);
       },
+      validatePrincipal: acceptSignedPrincipals,
     });
     const token = signAccessToken({ userId: ADMIN_ID, role: 'admin' }, TEST_SECRET, 900);
 
