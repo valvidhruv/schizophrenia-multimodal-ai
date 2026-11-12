@@ -26,8 +26,12 @@ function listPatientsHandler(patientStore: PatientStore): RequestHandler {
 
 function createPatientHandler(patientStore: PatientStore): RequestHandler {
   return asyncHandler(async (req, res) => {
+    const principal = req.auth;
+    if (!principal) {
+      throw ApiError.unauthorized('A Bearer access token is required.');
+    }
     const input = req.body as CreatePatientInput;
-    const record = await patientStore.create(input);
+    const record = await patientStore.create(input, principal);
     res.status(201).json({ ...record, disclaimer: DISCLAIMER });
   });
 }

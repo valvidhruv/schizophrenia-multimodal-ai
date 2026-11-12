@@ -6,6 +6,8 @@ import {
 import { ApiError } from '../errors';
 
 const PATIENT_ID = '44444444-4444-4444-8444-444444444444';
+const CREATOR_ID = '22222222-2222-4222-8222-222222222222';
+const creator = { userId: CREATOR_ID };
 
 const patientRow = {
   id: PATIENT_ID,
@@ -68,29 +70,50 @@ describe('createSqlPatientStore - create', () => {
     const { queryFn, calls } = fakeQuery(async () => [patientRow]);
     const store = createSqlPatientStore({ queryFn });
 
-    await store.create({ subjectId: hostileSubject });
+    await store.create({ subjectId: hostileSubject }, creator);
 
     expect(calls).toHaveLength(1);
     expect(calls[0].text).toContain(
       'INSERT INTO patients (subject_id, diagnosis, age, sex, handedness, created_by)'
     );
-    expect(calls[0].text).toContain('VALUES ($1, $2, $3, $4, $5, NULL)');
+    expect(calls[0].text).toContain('VALUES ($1, $2, $3, $4, $5, $6)');
     expect(calls[0].text).not.toContain(hostileSubject);
     expect(calls[0].text).not.toContain('OR 1=1');
-    expect(calls[0].params).toEqual([hostileSubject, null, null, null, null]);
+    expect(calls[0].text).not.toContain(CREATOR_ID);
+    expect(calls[0].params).toEqual([
+      hostileSubject,
+      null,
+      null,
+      null,
+      null,
+      CREATOR_ID,
+    ]);
+  });
+
+  test('persists the authenticated creator id as the sixth parameter', async () => {
+    const { queryFn, calls } = fakeQuery(async () => [patientRow]);
+    const store = createSqlPatientStore({ queryFn });
+
+    await store.create({ subjectId: 'SCHZ_001' }, { userId: CREATOR_ID });
+
+    expect(calls[0].params[5]).toBe(CREATOR_ID);
+    expect(calls[0].text).toContain('$6');
   });
 
   test('maps the returned row to the camelCase API record', async () => {
     const { queryFn } = fakeQuery(async () => [patientRow]);
     const store = createSqlPatientStore({ queryFn });
 
-    const record = await store.create({
-      subjectId: 'SCHZ_001',
-      diagnosis: 'schizophrenia',
-      age: 35,
-      sex: 'male',
-      handedness: 'right',
-    });
+    const record = await store.create(
+      {
+        subjectId: 'SCHZ_001',
+        diagnosis: 'schizophrenia',
+        age: 35,
+        sex: 'male',
+        handedness: 'right',
+      },
+      creator
+    );
 
     expect(record).toEqual(mappedPatient);
   });
@@ -99,9 +122,9 @@ describe('createSqlPatientStore - create', () => {
     const { queryFn, calls } = fakeQuery(async () => [patientRow]);
     const store = createSqlPatientStore({ queryFn });
 
-    await store.create({ subjectId: 'SCHZ_001', age: 42 });
+    await store.create({ subjectId: 'SCHZ_001', age: 42 }, creator);
 
-    expect(calls[0].params).toEqual(['SCHZ_001', null, 42, null, null]);
+    expect(calls[0].params).toEqual(['SCHZ_001', null, 42, null, null, CREATOR_ID]);
   });
 
   test('maps 23505 on patients_subject_id_key to a 409 ApiError', async () => {
@@ -110,7 +133,7 @@ describe('createSqlPatientStore - create', () => {
     });
     const store = createSqlPatientStore({ queryFn });
 
-    await expect(store.create({ subjectId: 'SCHZ_001' })).rejects.toMatchObject({
+    await expect(store.create({ subjectId: 'SCHZ_001' }, creator)).rejects.toMatchObject({
       name: 'ApiError',
       status: 409,
       code: 'CONFLICT',
@@ -123,7 +146,9 @@ describe('createSqlPatientStore - create', () => {
     });
     const store = createSqlPatientStore({ queryFn });
 
-    const err = await store.create({ subjectId: 'SECRET_SUBJECT_777' }).catch((e: unknown) => e);
+    const err = await store
+      .create({ subjectId: 'SECRET_SUBJECT_777' }, creator)
+      .catch((e: unknown) => e);
     const apiError = err as ApiError;
 
     expect(apiError.message).toBe('A patient with this subjectId already exists.');
@@ -138,13 +163,42 @@ describe('createSqlPatientStore - create', () => {
     const store = createSqlPatientStore({ queryFn });
 
     const err = (await store
-      .create({ subjectId: 'SCHZ_001' })
+      .create({ subjectId: 'SCHZ_001' }, creator)
       .catch((e: unknown) => e)) as Error;
 
     expect(err).toBeInstanceOf(Error);
     expect(err.name).not.toBe('ApiError');
     expect(err.message).toContain('23505');
     expect(err.message).toContain('patients_created_by_fkey');
+    expect((err as { constraint?: unknown }).constraint).toBeUndefined();
+  });
+
+  test('wraps a created_by foreign-key violation without exposing driver properties', async () => {
+    const failure = Object.assign(
+      new Error(
+        'insert or update on table "patients" violates foreign key constraint "patients_created_by_fkey"'
+      ),
+      {
+        code: '23503',
+        constraint: 'patients_created_by_fkey',
+        detail: `Key (created_by)=(${CREATOR_ID}) is not present in table "users".`,
+      }
+    );
+    const { queryFn } = fakeQuery(async () => {
+      throw failure;
+    });
+    const store = createSqlPatientStore({ queryFn });
+
+    const err = (await store
+      .create({ subjectId: 'SCHZ_001' }, creator)
+      .catch((e: unknown) => e)) as Error;
+
+    expect(err).not.toBe(failure);
+    expect(err.name).not.toBe('ApiError');
+    expect(err.message).toContain('23503');
+    expect(err.message).toContain('patients_created_by_fkey');
+    expect(err.message).not.toContain(CREATOR_ID);
+    expect((err as { detail?: unknown }).detail).toBeUndefined();
     expect((err as { constraint?: unknown }).constraint).toBeUndefined();
   });
 
@@ -161,7 +215,7 @@ describe('createSqlPatientStore - create', () => {
     const store = createSqlPatientStore({ queryFn });
 
     const err = (await store
-      .create({ subjectId: 'SCHZ_001', age: 35 })
+      .create({ subjectId: 'SCHZ_001', age: 35 }, creator)
       .catch((e: unknown) => e)) as Error;
 
     expect(err).not.toBe(failure);
@@ -177,7 +231,7 @@ describe('createSqlPatientStore - create', () => {
     const { queryFn } = fakeQuery(async () => []);
     const store = createSqlPatientStore({ queryFn });
 
-    await expect(store.create({ subjectId: 'SCHZ_001' })).rejects.toThrow(
+    await expect(store.create({ subjectId: 'SCHZ_001' }, creator)).rejects.toThrow(
       'Patient insert returned no row'
     );
   });

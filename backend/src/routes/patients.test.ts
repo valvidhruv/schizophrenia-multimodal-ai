@@ -99,13 +99,75 @@ describe('POST /api/patients with a store', () => {
 
     expect(res.status).toBe(201);
     expect(res.body).toEqual({ ...patient, disclaimer: DISCLAIMER });
-    expect(store.create).toHaveBeenCalledWith({
-      subjectId: 'SCHZ_001',
-      diagnosis: 'schizophrenia',
-      age: 35,
-      sex: 'male',
-      handedness: 'right',
-    });
+    expect(store.create).toHaveBeenCalledWith(
+      {
+        subjectId: 'SCHZ_001',
+        diagnosis: 'schizophrenia',
+        age: 35,
+        sex: 'male',
+        handedness: 'right',
+      },
+      expect.objectContaining({ userId: CLINICIAN_ID })
+    );
+  });
+
+  test('rejects creation without a token before the store is called', async () => {
+    const records: AuditRecord[] = [];
+    const store = fakeStore();
+    const app = appWith(store, records);
+
+    const res = await request(app)
+      .post('/api/patients')
+      .send({ subjectId: 'SCHZ_002' });
+
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe('UNAUTHORIZED');
+    expect(store.create).not.toHaveBeenCalled();
+    expect(records).toHaveLength(1);
+    expect(records[0].actorUserId).toBeUndefined();
+  });
+
+  test('ignores creator identity supplied in the request body', async () => {
+    const store = fakeStore();
+    const app = appWith(store);
+
+    const res = await request(app)
+      .post('/api/patients')
+      .set('Authorization', clinician)
+      .send({
+        subjectId: 'SCHZ_003',
+        createdBy: ADMIN_ID,
+        created_by: ADMIN_ID,
+        userId: ADMIN_ID,
+      });
+
+    expect(res.status).toBe(201);
+    expect(store.create).toHaveBeenCalledWith(
+      { subjectId: 'SCHZ_003' },
+      expect.objectContaining({ userId: CLINICIAN_ID })
+    );
+    const firstArgument = (store.create as jest.Mock).mock.calls[0][0];
+    expect(firstArgument).not.toHaveProperty('createdBy');
+    expect(firstArgument).not.toHaveProperty('created_by');
+    expect(firstArgument).not.toHaveProperty('userId');
+  });
+
+  test('records the authenticated creator as the audit actor', async () => {
+    const records: AuditRecord[] = [];
+    const store = fakeStore();
+    const app = appWith(store, records);
+
+    await request(app)
+      .post('/api/patients')
+      .set('Authorization', clinician)
+      .send({ subjectId: 'SCHZ_001' });
+
+    expect(records).toHaveLength(1);
+    expect(records[0].action).toBe('POST');
+    expect(records[0].path).toBe('/api/patients');
+    expect(records[0].statusCode).toBe(201);
+    expect(records[0].actorUserId).toBe(CLINICIAN_ID);
+    expect(records[0].actorRole).toBe('clinician');
   });
 
   test('rejects a researcher before the store is called', async () => {

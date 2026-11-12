@@ -7,6 +7,7 @@ import { signAccessToken } from './services/tokenService';
 import { createSqlPatientStore } from './services/patientService';
 import { disposableDatabaseUrl } from './testing/disposableDatabaseUrl';
 import { acceptSignedPrincipals } from './testing/principal';
+import type { AuditRecord } from './types';
 
 // Requires the existing schema to be applied to TEST_DATABASE_URL before this
 // suite runs; it never applies migrations. On a fresh disposable database, run
@@ -14,6 +15,8 @@ import { acceptSignedPrincipals } from './testing/principal';
 // an explicit CI setup step to avoid racing migrate.integration.test.ts.
 const TEST_SECRET = 'unit-test-secret-value-123456';
 const CLINICIAN_ID = '22222222-2222-4222-8222-222222222222';
+const RESEARCHER_ID = '33333333-3333-4333-8333-333333333333';
+const CLINICIAN_EMAIL = 'ph1e-b-it-clinician@example.test';
 const MISSING_ID = '99999999-9999-4999-8999-999999999999';
 
 const SUBJECT_CREATE = 'ph1d_it_create_001';
@@ -28,6 +31,8 @@ const SUBJECT_USCORE_LITERAL = 'ph1d_it_us_A_B';
 const SUBJECT_USCORE_DECOY = 'ph1d_it_us_AXB';
 const SUBJECT_BS_LITERAL = 'ph1d_it_bs_X\\Y';
 const SUBJECT_BS_DECOY = 'ph1d_it_bs_XZY';
+const SUBJECT_UNAUTHENTICATED = 'ph1e_b_it_unauth_001';
+const SUBJECT_RESEARCHER_READ = 'ph1e_b_it_read_001';
 
 const TEST_SUBJECT_IDS = [
   SUBJECT_CREATE,
@@ -41,6 +46,8 @@ const TEST_SUBJECT_IDS = [
   SUBJECT_USCORE_DECOY,
   SUBJECT_BS_LITERAL,
   SUBJECT_BS_DECOY,
+  SUBJECT_UNAUTHENTICATED,
+  SUBJECT_RESEARCHER_READ,
 ];
 
 const baseEnv = {
@@ -59,14 +66,43 @@ describeLive('patient management integration (disposable test database)', () => 
   let app: ReturnType<typeof createApp>;
   let suiteReady = false;
 
+  const auditRecords: AuditRecord[] = [];
+
   const clinician = `Bearer ${signAccessToken(
     { userId: CLINICIAN_ID, role: 'clinician' },
+    TEST_SECRET,
+    900
+  )}`;
+  const researcher = `Bearer ${signAccessToken(
+    { userId: RESEARCHER_ID, role: 'researcher' },
     TEST_SECRET,
     900
   )}`;
 
   async function removeSeeded(): Promise<void> {
     await query('DELETE FROM patients WHERE subject_id = ANY($1)', [TEST_SUBJECT_IDS]);
+  }
+
+  async function removeFixtureUser(): Promise<void> {
+    await query('DELETE FROM patients WHERE created_by = $1', [CLINICIAN_ID]);
+    await query('DELETE FROM users WHERE id = $1 OR email = $2', [
+      CLINICIAN_ID,
+      CLINICIAN_EMAIL,
+    ]);
+  }
+
+  async function ensureFixtureUser(): Promise<void> {
+    await query(
+      `INSERT INTO users (id, email, password_hash, full_name, role)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        CLINICIAN_ID,
+        CLINICIAN_EMAIL,
+        'phase-1e-b-integration-fixture-not-a-login-password',
+        'Phase 1E-B Integration Clinician',
+        'clinician',
+      ]
+    );
   }
 
   function createPatient(subjectId: string, extra: Record<string, unknown> = {}) {
@@ -94,9 +130,13 @@ describeLive('patient management integration (disposable test database)', () => 
       );
     }
     await removeSeeded();
+    await removeFixtureUser();
+    await ensureFixtureUser();
     app = createApp({
       config: loadConfig(baseEnv),
-      auditRecorder: () => undefined,
+      auditRecorder: (record) => {
+        auditRecords.push(record);
+      },
       patientStore: createSqlPatientStore(),
       validatePrincipal: acceptSignedPrincipals,
     });
@@ -107,13 +147,15 @@ describeLive('patient management integration (disposable test database)', () => 
     try {
       if (suiteReady) {
         await removeSeeded();
+        await removeFixtureUser();
       }
     } finally {
       await closeDatabase();
     }
   });
 
-  test('creates a patient, reads it back, and never exposes created_by', async () => {
+  test('creates a patient with the authenticated creator and never exposes created_by', async () => {
+    auditRecords.length = 0;
     const created = await createPatient(SUBJECT_CREATE, {
       diagnosis: 'schizophrenia',
       age: 35,
@@ -132,11 +174,62 @@ describeLive('patient management integration (disposable test database)', () => 
     expect(created.body.panssAvailable).toBe(false);
     expect(created.body.disclaimer).toBe(DISCLAIMER);
     expect(created.body).not.toHaveProperty('createdBy');
+    expect(created.body).not.toHaveProperty('created_by');
     expect(created.body.createdAt).toEqual(expect.any(String));
+
+    const persisted = await query<{ created_by: string | null }>(
+      'SELECT created_by::text AS created_by FROM patients WHERE id = $1',
+      [created.body.id]
+    );
+    expect(persisted[0]?.created_by).toBe(CLINICIAN_ID);
+
+    const audit = auditRecords.find(
+      (record) =>
+        record.action === 'POST' &&
+        record.path === '/api/patients' &&
+        record.statusCode === 201
+    );
+    expect(audit).toBeDefined();
+    expect(audit?.actorUserId).toBe(CLINICIAN_ID);
+    expect(audit?.actorRole).toBe('clinician');
 
     const fetched = await getPath(`/api/patients/${created.body.id}`);
     expect(fetched.status).toBe(200);
     expect(fetched.body).toEqual(created.body);
+  });
+
+  test('rejects unauthenticated creation and inserts no patient', async () => {
+    const res = await request(app)
+      .post('/api/patients')
+      .send({ subjectId: SUBJECT_UNAUTHENTICATED });
+
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe('UNAUTHORIZED');
+
+    const rows = await query<{ total: number }>(
+      'SELECT COUNT(*)::int AS total FROM patients WHERE subject_id = $1',
+      [SUBJECT_UNAUTHENTICATED]
+    );
+    expect(rows[0]?.total).toBe(0);
+  });
+
+  test('keeps global read access for other authenticated roles', async () => {
+    const created = await createPatient(SUBJECT_RESEARCHER_READ);
+    expect(created.status).toBe(201);
+
+    const detail = await request(app)
+      .get(`/api/patients/${created.body.id}`)
+      .set('Authorization', researcher);
+    expect(detail.status).toBe(200);
+    expect(detail.body.subjectId).toBe(SUBJECT_RESEARCHER_READ);
+
+    const list = await request(app)
+      .get(`/api/patients?search=${SUBJECT_RESEARCHER_READ}`)
+      .set('Authorization', researcher);
+    expect(list.status).toBe(200);
+    expect(
+      list.body.data.map((row: { subjectId: string }) => row.subjectId)
+    ).toEqual([SUBJECT_RESEARCHER_READ]);
   });
 
   test('rejects a duplicate subject id with 409 and no identifier echo', async () => {

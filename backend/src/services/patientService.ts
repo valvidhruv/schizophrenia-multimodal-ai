@@ -1,5 +1,6 @@
 import { query as defaultQuery, sanitizeDatabaseError } from '../db';
 import { ApiError } from '../errors';
+import type { AuthPrincipal } from '../types';
 
 export interface PatientRecord {
   id: string;
@@ -25,6 +26,8 @@ export interface CreatePatientInput {
   handedness?: string;
 }
 
+export type PatientCreator = Pick<AuthPrincipal, 'userId'>;
+
 export interface ListPatientsQuery {
   page: number;
   limit: number;
@@ -43,7 +46,7 @@ export interface PatientPage {
 }
 
 export interface PatientStore {
-  create(input: CreatePatientInput): Promise<PatientRecord>;
+  create(input: CreatePatientInput, creator: PatientCreator): Promise<PatientRecord>;
   findById(id: string): Promise<PatientRecord | null>;
   list(query: ListPatientsQuery): Promise<PatientPage>;
 }
@@ -139,13 +142,14 @@ function buildFilters(query: ListPatientsQuery): { text: string; params: unknown
 
 async function create(
   input: CreatePatientInput,
+  creator: PatientCreator,
   queryFn: PatientQueryFn
 ): Promise<PatientRecord> {
   let rows: PatientRow[];
   try {
     rows = await queryFn<PatientRow>(
       `INSERT INTO patients (subject_id, diagnosis, age, sex, handedness, created_by)
-       VALUES ($1, $2, $3, $4, $5, NULL)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING ${PATIENT_COLUMNS}`,
       [
         input.subjectId,
@@ -153,6 +157,7 @@ async function create(
         input.age ?? null,
         input.sex ?? null,
         input.handedness ?? null,
+        creator.userId,
       ]
     );
   } catch (err) {
@@ -220,7 +225,7 @@ export function createSqlPatientStore(
 ): PatientStore {
   const queryFn = options.queryFn ?? defaultQuery;
   return {
-    create: (input) => create(input, queryFn),
+    create: (input, creator) => create(input, creator, queryFn),
     findById: (id) => findById(id, queryFn),
     list: (query) => list(query, queryFn),
   };
